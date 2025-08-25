@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quantum Tunneling & Momentum-Space Visualizer</title>
+  <style>
+    :root {
+      --bg: #0f1226;
+      --panel: #171a35;
+      --text: #e9ecff;
+      --muted: #aab1ffcc;
+      --accent: #7aa2ff;
+      --good: #7bffb2;
+      --warn: #ffce7a;
+      --bad: #ff7a9f;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body { margin: 0; font-family: ui-sans-serif, system-ui, Segoe UI, Roboto, Arial, sans-serif; background: var(--bg); color: var(--text); display: grid; grid-template-rows: auto 1fr auto; gap: 10px; }
+    header, footer { padding: 12px 16px; background: var(--panel); }
+    header h1 { margin: 0; font-size: 18px; font-weight: 700; }
+    header p { margin: 4px 0 0 0; color: var(--muted); font-size: 12px; }
+    main { display: grid; grid-template-columns: 600px 1fr; gap: 12px; padding: 0 12px 12px; gap: 12px; padding: 0 12px 12px; }
+    .card { background: var(--panel); border-radius: 12px; padding: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.25); }
+    .controls { display: grid; gap: 12px; height: calc(100vh - 160px); overflow: auto; }
+    fieldset { border: 1px solid #272b54; border-radius: 10px; padding: 10px 12px; }
+    legend { padding: 0 6px; color: var(--muted); }
+    label { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; font-size: 12px; margin: 6px 0; }
+    input[type="number"], select { width: 140px; background: #0e1030; border: 1px solid #2a2f62; color: var(--text); border-radius: 6px; padding: 4px 6px; }
+    input[type="range"] { width: 100%; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+    button { background: #243079; border: 1px solid #3040a2; color: var(--text); border-radius: 8px; padding: 8px 10px; cursor: pointer; }
+    button:hover { filter: brightness(1.1); }
+    button[aria-pressed="true"] { background: #3254d6; }
+    canvas { width: 100%; height: 280px; background: #090b20; border-radius: 10px; display: block; }
+    .stack { display: grid; gap: 12px; }
+    .grid2 { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    .small { font-size: 11px; color: var(--muted); }
+    .kaxis, .xaxis { font-size: 10px; color: #98a1ff; }
+    .badge { font-size: 10px; padding: 2px 6px; border-radius: 999px; background: #2a2f62; color: var(--muted); }
+    .translucent { backdrop-filter: blur(6px); background: rgba(23, 26, 53, 0.7); border: 1px solid rgba(255,255,255,0.06); }
+    .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .hint { font-size: 12px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Quantum Tunneling & Momentum-Space Visualizer (1D)</h1>
+    <p>Split-Step Fourier method for the time-dependent Schrödinger equation in 1D (atomic units: ℏ=1, m=1). Shows |ψ(x)|² and |Φ(k)|². Now includes imaginary-time relaxation for eigenstates.</p>
+  </header>
+
+  <main>
+    <section class="card controls translucent">
+      <fieldset>
+        <legend>Simulation</legend>
+        <div class="row">
+          <label>Grid size N <input id="N" type="number" value="1024" min="256" max="4096" step="256"></label>
+          <label>Domain length L <input id="L" type="number" value="200" step="10"></label>
+        </div>
+        <div class="row">
+          <label>Time step dt <input id="dt" type="number" value="0.05" step="0.01"></label>
+          <label>Steps / frame <input id="spf" type="number" value="2" step="1" min="1" max="50"></label>
+        </div>
+        <div class="row">
+          <label>Damping at edges <input id="damp" type="number" value="0.0" step="0.01" min="0" max="0.2"></label>
+          <label>Auto-normalize <select id="norm"><option value="1" selected>Yes</option><option value="0">No</option></select></label>
+        </div>
+        <div class="btns">
+          <button id="runBtn" aria-pressed="true">⏵ Run</button>
+          <button id="stepBtn">⏭ Step</button>
+          <button id="resetBtn">🔄 Reset</button>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Initial Wavepacket</legend>
+        <div class="row">
+          <label>Shape
+            <select id="shape">
+              <option value="gaussian" selected>Gaussian</option>
+              <option value="dog">Derivative of Gaussian</option>
+            </select>
+          </label>
+          <label>Mean momentum k₀ <input id="k0" type="number" value="2.0" step="0.1"></label>
+        </div>
+        <div class="row">
+          <label>Center x₀ <input id="x0" type="number" value="-60" step="1"></label>
+          <label>Width σ <input id="sigma" type="number" value="8" step="0.5"></label>
+        </div>
+        <label>Global phase φ₀ <input id="phi0" type="number" value="0" step="0.1"></label>
+        <div class="small">ψ(x,0) ∝ exp(−(x−x₀)²/(2σ²))·exp(i·k₀·x). DoG uses ∂x of the Gaussian.</div>
+        <div class="btns"><button id="applyInit">Apply Initial Condition</button></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Potential V(x)</legend>
+        <label>Type
+          <select id="potType">
+            <option value="none">None</option>
+            <option value="barrier" selected>Barrier (box)</option>
+            <option value="well">Well (box)</option>
+            <option value="coulomb">Coulomb (soft-core)</option>
+          </select>
+        </label>
+        <div id="barrierGroup" class="stack">
+          <div class="row">
+            <label>Center x_c <input id="Bx" type="number" value="0" step="1"></label>
+            <label>Width w <input id="Bw" type="number" value="20" step="1"></label>
+          </div>
+          <div class="row">
+            <label>Height |V₀| <input id="Bv" type="number" value="2.0" step="0.1"></label>
+            <label>Transparency <input id="Balpha" type="number" value="0.18" step="0.02" min="0" max="0.6"></label>
+          </div>
+        </div>
+        <div id="coulombGroup" class="stack" style="display:none">
+          <div class="row">
+            <label>Nuclear charge Z <input id="Z" type="number" value="1" step="0.1"></label>
+            <label>Softening a <input id="softA" type="number" value="1.0" step="0.1"></label>
+          </div>
+          <label>Center x_c <input id="Cx" type="number" value="0" step="1"></label>
+        </div>
+        <div class="btns"><button id="applyPotential">Apply Potential</button></div>
+        <div class="small">Barrier/well drawn as a translucent box. Coulomb uses V(x) = −Z/√((x−x_c)² + a²).</div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Eigenstates (Imaginary Time)</legend>
+        <div class="row">
+          <label>τ step (dt_τ) <input id="dtau" type="number" value="0.05" step="0.01"></label>
+          <label>Iterations <input id="iters" type="number" value="300" step="50" min="10" max="5000"></label>
+        </div>
+        <div class="row">
+          <label>Target parity
+            <select id="parity">
+              <option value="even" selected>Even (ground)</option>
+              <option value="odd">Odd (1st excited)</option>
+            </select>
+          </label>
+          <label style="grid-template-columns:auto 1fr; gap:6px;">
+            <input id="useEigenInit" type="checkbox"> Use eigenstate for "Apply Initial Condition"
+          </label>
+        </div>
+        <div class="btns">
+          <button id="relaxBtn" title="Imaginary-time propagation to approximate eigenstate for current V(x)">Find eigenstate (τ)</button>
+          <button id="applyEigenBtn" title="Copy the last relaxed eigenstate into ψ right now">Use eigenstate now</button>
+        </div>
+        <div class="small">During relaxation: auto-renormalizes and enforces selected parity around the potential center x_c. For excited states beyond the first, Gram–Schmidt against lower states would be needed.</div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Rendering</legend>
+        <div class="row">
+          <label>Y scale |ψ|² <input id="yscaleX" type="number" value="1.0" step="0.1"></label>
+          <label>Y scale |Φ|² <input id="yscaleK" type="number" value="1.0" step="0.1"></label>
+        </div>
+        <div class="row">
+          <label>Lines (space) <select id="lineStyleX"><option value="density" selected>Density only</option><option value="full">Density + Re/Im</option></select></label>
+          <label>Lines (k-space) <select id="lineStyleK"><option value="density" selected>Density only</option><option value="log">Log power</option></select></label>
+        </div>
+      </fieldset>
+
+      <div class="hint">Notes: Periodic boundary conditions (FFT). Use large L and small dt to reduce wrap-around. Turn off damping during relaxation if you want unbiased tails.</div>
+    </section>
+
+    <section class="card stack">
+      <div class="grid2">
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <div><strong>Position Space</strong> <span class="badge">|ψ(x)|²</span></div>
+            <div class="xaxis" id="xAxis"></div>
+          </div>
+          <canvas id="canvasX" width="1100" height="320"></canvas>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <div><strong>Momentum Space</strong> <span class="badge">|Φ(k)|²</span></div>
+            <div class="kaxis" id="kAxis"></div>
+          </div>
+          <canvas id="canvasK" width="1100" height="320"></canvas>
+        </div>
+      </div>
+      <div class="row3 small">
+        <div>⟨x⟩ = <span id="meanX">0</span></div>
+        <div>⟨k⟩ = <span id="meanK">0</span></div>
+        <div>Norm = <span id="normVal">1.0000</span></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="small">
+    Built for intuition, not precision. Optional potentials: rectangular barrier/well or soft-core Coulomb (proton fixed at x_c). Eigenstate mode uses imaginary-time propagation with parity projection.
+  </footer>
+
+  <script>
+    // ===== Utility: Complex ops on parallel re/im Float64Arrays =====
+    function cscale(re, im, s) { for (let i = 0; i < re.length; i++) { re[i] *= s; im[i] *= s; } }
+
+    // ===== Iterative radix-2 FFT (in-place) =====
+    class FFT {
+      constructor(N) {
+        if ((N & (N - 1)) !== 0) throw new Error("N must be power of 2");
+        this.N = N;
+        this.br = new Uint32Array(N);
+        const lg = Math.log2(N) | 0;
+        for (let i = 0; i < N; i++) {
+          let x = i, y = 0;
+          for (let b = 0; b < lg; b++) { y = (y << 1) | (x & 1); x >>= 1; }
+          this.br[i] = y >>> 0;
+        }
+      }
+      transform(re, im, inverse=false) {
+        const N = this.N;
+        for (let i = 0; i < N; i++) {
+          const j = this.br[i];
+          if (j > i) {
+            let tr = re[i]; re[i] = re[j]; re[j] = tr;
+            let ti = im[i]; im[i] = im[j]; im[j] = ti;
+          }
+        }
+        for (let len = 2; len <= N; len <<= 1) {
+          const half = len >>> 1;
+          const angBase = (inverse ? 2 : -2) * Math.PI / len;
+          for (let i = 0; i < N; i += len) {
+            for (let j = 0; j < half; j++) {
+              const ang = angBase * j;
+              const wr = Math.cos(ang), wi = Math.sin(ang);
+              const uR = re[i + j], uI = im[i + j];
+              const vR = re[i + j + half] * wr - im[i + j + half] * wi;
+              const vI = re[i + j + half] * wi + im[i + j + half] * wr;
+              re[i + j] = uR + vR;
+              im[i + j] = uI + vI;
+              re[i + j + half] = uR - vR;
+              im[i + j + half] = uI - vI;
+            }
+          }
+        }
+        if (inverse) { const invN = 1 / N; for (let i = 0; i < N; i++) { re[i] *= invN; im[i] *= invN; } }
+      }
+      forward(re, im) { this.transform(re, im, false); }
+      inverse(re, im) { this.transform(re, im, true); }
+    }
+
+    // ===== Global state =====
+    const els = id => document.getElementById(id);
+    const cX = els('canvasX');
+    const cK = els('canvasK');
+    const gX = cX.getContext('2d');
+    const gK = cK.getContext('2d');
+
+    let N = parseInt(els('N').value, 10);
+    let L = parseFloat(els('L').value);
+    let dx, x, k, fft;
+
+    // wavefunction
+    let psiR, psiI; // real & imag
+    let tmpR, tmpI; // scratch arrays for FFT and projections
+    let eigenStoreR=null, eigenStoreI=null; // last relaxed eigenstate snapshot
+
+    // operators
+    let V;          // potential in x-space
+    let phaseV_R, phaseV_I; // exp(-i V dt/2)
+    let phaseK_R, phaseK_I; // exp(-i k^2 dt/2)
+
+    let dt = parseFloat(els('dt').value);
+    let spf = parseInt(els('spf').value, 10);
+    let autoNorm = els('norm').value === '1';
+
+    // controls
+    const state = {
+      running: true,
+      lineStyleX: 'density',
+      lineStyleK: 'density',
+      yscaleX: parseFloat(els('yscaleX').value),
+      yscaleK: parseFloat(els('yscaleK').value),
+      barrier: { x: parseFloat(els('Bx').value), w: parseFloat(els('Bw').value), v: parseFloat(els('Bv').value), alpha: parseFloat(els('Balpha').value) },
+      coulomb: { Z: parseFloat(els('Z').value), a: parseFloat(els('softA').value), x: parseFloat(els('Cx').value) },
+      potType: els('potType').value,
+      packet: { shape: els('shape').value, k0: parseFloat(els('k0').value), x0: parseFloat(els('x0').value), sigma: parseFloat(els('sigma').value), phi0: parseFloat(els('phi0').value) },
+      damp: parseFloat(els('damp').value),
+      // eigen
+      dtau: parseFloat(els('dtau') ? els('dtau').value : 0.05),
+      iters: parseInt(els('iters') ? els('iters').value : 300, 10),
+      parity: (els('parity') ? els('parity').value : 'even'),
+      useEigenAsInitial: !!(els('useEigenInit') && els('useEigenInit').checked)
+    };
+
+    function setupGrid() {
+      dx = L / N;
+      x = new Float64Array(N);
+      for (let i = 0; i < N; i++) x[i] = -L/2 + i * dx;
+      const dk = 2 * Math.PI / L;
+      k = new Float64Array(N);
+      for (let i = 0; i < N; i++) k[i] = (i <= N/2) ? i * dk : (i - N) * dk;
+      fft = new FFT(N);
+
+      psiR = new Float64Array(N); psiI = new Float64Array(N);
+      tmpR = new Float64Array(N); tmpI = new Float64Array(N);
+
+      V = new Float64Array(N);
+      phaseV_R = new Float64Array(N); phaseV_I = new Float64Array(N);
+      phaseK_R = new Float64Array(N); phaseK_I = new Float64Array(N);
+
+      buildPotential();
+      buildPhases();
+      applyInitial();
+    }
+
+    function buildPotential() {
+      V.fill(0);
+      const type = state.potType;
+      if (type === 'barrier' || type === 'well') {
+        const s = (type === 'barrier') ? 1 : -1;
+        const x0 = state.barrier.x;
+        const w = state.barrier.w;
+        const v0 = s * state.barrier.v;
+        const left = x0 - w/2, right = x0 + w/2;
+        for (let i = 0; i < N; i++) { if (x[i] >= left && x[i] <= right) V[i] = v0; }
+      } else if (type === 'coulomb') {
+        const {Z, a, x:xc} = state.coulomb;
+        for (let i = 0; i < N; i++) { const dxp = x[i] - xc; V[i] = -Z / Math.sqrt(dxp*dxp + a*a); }
+      }
+    }
+
+    function buildPhases() {
+      const halfDt = dt * 0.5;
+      for (let i = 0; i < N; i++) { const th = -V[i] * halfDt; phaseV_R[i] = Math.cos(th); phaseV_I[i] = Math.sin(th); }
+      for (let i = 0; i < N; i++) { const th = -(k[i]*k[i]) * halfDt; phaseK_R[i] = Math.cos(th); phaseK_I[i] = Math.sin(th); }
+    }
+
+    function applyInitial() {
+      if (state.useEigenAsInitial && eigenStoreR && eigenStoreR.length === N) {
+        psiR.set(eigenStoreR); psiI.set(eigenStoreI); renormalize(); return;
+      }
+      const {shape, k0, x0, sigma, phi0} = state.packet;
+      const s2 = sigma*sigma; const cphi = Math.cos(phi0), sphi = Math.sin(phi0);
+      let norm = 0;
+      for (let i = 0; i < N; i++) {
+        const xi = x[i];
+        const gauss = Math.exp(- (xi - x0)*(xi - x0) / (2*s2));
+        let r, im;
+        if (shape === 'dog') {
+          const d = -(xi - x0) / s2 * gauss; r = d * Math.cos(k0 * xi); im = d * Math.sin(k0 * xi);
+        } else {
+          r = gauss * Math.cos(k0 * xi); im = gauss * Math.sin(k0 * xi);
+        }
+        const R = r * cphi - im * sphi; const I = r * sphi + im * cphi;
+        psiR[i] = R; psiI[i] = I; norm += (R*R + I*I) * dx;
+      }
+      const s = 1 / Math.sqrt(norm); cscale(psiR, psiI, s);
+    }
+
+    function renormalize() {
+      let norm = 0; for (let i = 0; i < N; i++) norm += (psiR[i]*psiR[i] + psiI[i]*psiI[i]) * dx;
+      const s = 1 / Math.sqrt(norm); cscale(psiR, psiI, s);
+      els('normVal').textContent = norm.toFixed(4);
+    }
+
+    function stepOnce() {
+      // half-step potential
+      for (let i = 0; i < N; i++) { const a = psiR[i], b = psiI[i]; const cr = phaseV_R[i], ci = phaseV_I[i]; psiR[i] = a*cr - b*ci; psiI[i] = a*ci + b*cr; }
+      // k-space kinetic
+      tmpR.set(psiR); tmpI.set(psiI); fft.forward(tmpR, tmpI);
+      for (let i = 0; i < N; i++) { const a = tmpR[i], b = tmpI[i]; const cr = phaseK_R[i], ci = phaseK_I[i]; tmpR[i] = a*cr - b*ci; tmpI[i] = a*ci + b*cr; }
+      fft.inverse(tmpR, tmpI); psiR.set(tmpR); psiI.set(tmpI);
+      // half-step potential
+      for (let i = 0; i < N; i++) { const a = psiR[i], b = psiI[i]; const cr = phaseV_R[i], ci = phaseV_I[i]; psiR[i] = a*cr - b*ci; psiI[i] = a*ci + b*cr; }
+      // edge damping
+      const damp = state.damp;
+      if (damp > 0) {
+        const edge = 0.1 * L; // 10% on each side
+        for (let i = 0; i < N; i++) { const xi = Math.abs(x[i]); if (xi > L/2 - edge) { const t = (xi - (L/2 - edge)) / edge; const f = Math.exp(-damp * t * t); psiR[i] *= f; psiI[i] *= f; } }
+      }
+      if (autoNorm) renormalize(); else { let norm = 0; for (let i=0;i<N;i++) norm += (psiR[i]*psiR[i]+psiI[i]*psiI[i]) * dx; els('normVal').textContent = norm.toFixed(4); }
+    }
+
+    // Momentum distribution and plotting helpers
+    function momentumDistribution(outK, outP) {
+      tmpR.set(psiR); tmpI.set(psiI); fft.forward(tmpR, tmpI);
+      let idx = 0;
+      for (let i = N/2 + 1; i < N; i++, idx++) { outK[idx] = k[i]; outP[idx] = (tmpR[i]*tmpR[i] + tmpI[i]*tmpI[i]) * dx; }
+      for (let i = 0; i <= N/2; i++, idx++) { outK[idx] = k[i]; outP[idx] = (tmpR[i]*tmpR[i] + tmpI[i]*tmpI[i]) * dx; }
+    }
+
+    function expectationXK() {
+      let mx = 0, mk = 0; for (let i=0;i<N;i++) { const p = psiR[i]*psiR[i]+psiI[i]*psiI[i]; mx += x[i]*p*dx; }
+      tmpR.set(psiR); tmpI.set(psiI); fft.forward(tmpR,tmpI);
+      for (let i=0;i<N;i++) { const p = (tmpR[i]*tmpR[i]+tmpI[i]*tmpI[i]) * dx; mk += k[i]*p*(1/(2*Math.PI)); }
+      return {mx, mk};
+    }
+
+    // ===== Drawing =====
+    function drawPosition() {
+      const w = cX.width, h = cX.height; gX.clearRect(0,0,w,h);
+      gX.strokeStyle = 'rgba(255,255,255,0.12)'; gX.lineWidth = 1; gX.beginPath(); gX.moveTo(0, h-20); gX.lineTo(w, h-20); gX.stroke();
+      // density |psi|^2
+      let pmax = 1e-12; for (let i=0;i<N;i++) { const p = psiR[i]*psiR[i]+psiI[i]*psiI[i]; if (p>pmax) pmax=p; }
+      const yscale = state.yscaleX / pmax; const sx = w / L; const sy = (h-24) * 0.95;
+      // barrier/well box
+      if (state.potType === 'barrier' || state.potType === 'well') {
+        const col = state.potType === 'barrier' ? `rgba(255,122,159,${state.barrier.alpha})` : `rgba(122,170,255,${state.barrier.alpha})`;
+        const left = state.barrier.x - state.barrier.w/2; const right = state.barrier.x + state.barrier.w/2;
+        const x1 = Math.floor((left + L/2) * sx); const x2 = Math.ceil((right + L/2) * sx);
+        gX.fillStyle = col; gX.fillRect(x1, 0, Math.max(1,x2-x1), h);
+      }
+      // Coulomb curve
+      if (state.potType === 'coulomb') {
+        gX.strokeStyle = 'rgba(122,170,255,0.6)'; gX.lineWidth = 1; gX.beginPath();
+        const Z = state.coulomb.Z, a = state.coulomb.a, xc = state.coulomb.x;
+        for (let i=0;i<N;i++) {
+          const xi = x[i]; const Vc = -Z/Math.sqrt((xi-xc)*(xi-xc)+a*a);
+          const X = (xi + L/2) * sx; const Y = h - 20 - (Vc * 0.2) * sy;
+          if (i===0) gX.moveTo(X,Y); else gX.lineTo(X,Y);
+        }
+        gX.stroke();
+      }
+      // |psi|^2
+      gX.strokeStyle = '#7bffb2'; gX.lineWidth = 2; gX.beginPath();
+      for (let i=0;i<N;i++) { const xi = x[i]; const p = (psiR[i]*psiR[i]+psiI[i]*psiI[i]) * yscale; const X = (xi + L/2) * sx; const Y = h - 20 - Math.min(1.0, p) * sy; if (i===0) gX.moveTo(X,Y); else gX.lineTo(X,Y); }
+      gX.stroke();
+      if (state.lineStyleX === 'full') {
+        gX.strokeStyle = '#aab1ff'; gX.lineWidth = 1; gX.beginPath();
+        for (let i=0;i<N;i++) { const xi = x[i]; const v = psiR[i]; const X = (xi + L/2) * sx; const Y = h - 20 - (0.5 + 0.45 * v) * (h-24); if (i===0) gX.moveTo(X,Y); else gX.lineTo(X,Y); }
+        gX.stroke();
+        gX.strokeStyle = '#ffd29a'; gX.lineWidth = 1; gX.beginPath();
+        for (let i=0;i<N;i++) { const xi = x[i]; const v = psiI[i]; const X = (xi + L/2) * sx; const Y = h - 20 - (0.5 + 0.45 * v) * (h-24); if (i===0) gX.moveTo(X,Y); else gX.lineTo(X,Y); }
+        gX.stroke();
+      }
+      els('xAxis').textContent = `x ∈ [${(-L/2).toFixed(1)}, ${(L/2).toFixed(1)}], dx=${dx.toFixed(2)}`;
+    }
+
+    function drawMomentum() {
+      const w = cK.width, h = cK.height; gK.clearRect(0,0,w,h);
+      gK.strokeStyle = 'rgba(255,255,255,0.12)'; gK.lineWidth = 1; gK.beginPath(); gK.moveTo(0,h-20); gK.lineTo(w,h-20); gK.stroke();
+      const KK = new Float64Array(N); const PP = new Float64Array(N); momentumDistribution(KK, PP);
+      let pmax = 1e-18, kmin = +Infinity, kmax = -Infinity; for (let i=0;i<N;i++) { if (PP[i]>pmax) pmax = PP[i]; if (KK[i]<kmin) kmin = KK[i]; if (KK[i]>kmax) kmax = KK[i]; }
+      const yscale = state.yscaleK / pmax; const sx = w / (kmax - kmin); const sy = (h-24) * 0.95;
+      gK.strokeStyle = '#7aa2ff'; gK.lineWidth = 2; gK.beginPath();
+      for (let i=0;i<N;i++) { const X = (KK[i] - kmin) * sx; let p = PP[i]; if (state.lineStyleK === 'log') p = Math.log10(1e-12 + p); const Y = h - 20 - Math.min(1.0, p * yscale) * sy; if (i===0) gK.moveTo(X,Y); else gK.lineTo(X,Y); }
+      gK.stroke();
+      els('kAxis').textContent = `k ∈ [${kmin.toFixed(2)}, ${kmax.toFixed(2)}], dk=${(2*Math.PI/L).toFixed(3)}`;
+    }
+
+    function drawHUD() { const {mx, mk} = expectationXK(); els('meanX').textContent = mx.toFixed(2); els('meanK').textContent = mk.toFixed(2); }
+
+    // ===== Imaginary-time propagation (eigenstate finder) =====
+    function potentialCenterIndex() {
+      let xc = 0;
+      if (state.potType === 'coulomb') xc = state.coulomb.x; else if (state.potType === 'barrier' || state.potType === 'well') xc = state.barrier.x;
+      let i0 = Math.round((xc + L/2) / dx); if (i0 < 0) i0 = 0; if (i0 >= N) i0 = N-1; return i0;
+    }
+
+    function parityProjectAroundCenter(parity) {
+      const i0 = potentialCenterIndex();
+      tmpR.set(psiR); tmpI.set(psiI);
+      for (let off = 0; off < N; off++) {
+        const a = i0 + off, b = i0 - off; if (a >= N && b < 0) break;
+        if (a >= 0 && a < N && b >= 0 && b < N) {
+          if (parity === 'even') {
+            const r = 0.5 * (tmpR[a] + tmpR[b]); const im = 0.5 * (tmpI[a] + tmpI[b]); psiR[a] = r; psiI[a] = im; psiR[b] = r; psiI[b] = im;
+          } else { // odd
+            const r = 0.5 * (tmpR[a] - tmpR[b]); const im = 0.5 * (tmpI[a] - tmpI[b]); psiR[a] = r; psiI[a] = im; psiR[b] = -r; psiI[b] = -im;
+          }
+        } else if (a >= 0 && a < N) {
+          // Only one side available near boundaries; push toward zero to avoid bias
+          psiR[a] = 0; psiI[a] = 0;
+        } else if (b >= 0 && b < N) {
+          psiR[b] = 0; psiI[b] = 0;
+        } else {
+          break;
+        }
+      }
+    }
+
+    function stepOnceImagCached(expV, expK, parity) {
+      for (let i = 0; i < N; i++) { psiR[i] *= expV[i]; psiI[i] *= expV[i]; }
+      tmpR.set(psiR); tmpI.set(psiI); fft.forward(tmpR, tmpI);
+      for (let i = 0; i < N; i++) { tmpR[i] *= expK[i]; tmpI[i] *= expK[i]; }
+      fft.inverse(tmpR, tmpI); psiR.set(tmpR); psiI.set(tmpI);
+      for (let i = 0; i < N; i++) { psiR[i] *= expV[i]; psiI[i] *= expV[i]; }
+      // Enforce desired parity each iteration to avoid collapse to wrong symmetry
+      parityProjectAroundCenter(parity);
+    }
+
+    function relaxEigenstate() {
+      state.running = false; els('runBtn').setAttribute('aria-pressed','false'); els('runBtn').textContent='⏸ Pause';
+      const tau = parseFloat(els('dtau').value); const iters = parseInt(els('iters').value, 10); const halfTau = tau * 0.5;
+      const expV = new Float64Array(N); const expK = new Float64Array(N);
+      for (let i = 0; i < N; i++) expV[i] = Math.exp(-V[i] * halfTau);
+      for (let i = 0; i < N; i++) expK[i] = Math.exp(-(k[i]*k[i]) * halfTau);
+      const parity = els('parity').value;
+      const drawEvery = Math.max(1, Math.floor(iters / 20));
+      for (let t = 0; t < iters; t++) {
+        stepOnceImagCached(expV, expK, parity);
+        renormalize();
+        if ((t % drawEvery) === 0) { drawPosition(); drawMomentum(); drawHUD(); }
+      }
+      // snapshot
+      eigenStoreR = psiR.slice(); eigenStoreI = psiI.slice();
+      drawPosition(); drawMomentum(); drawHUD();
+    }
+
+    function applyEigenNow() {
+      if (!eigenStoreR || eigenStoreR.length !== N) return;
+      psiR.set(eigenStoreR); psiI.set(eigenStoreI); renormalize(); drawPosition(); drawMomentum(); drawHUD();
+    }
+
+    // ===== UI Wiring =====
+    function readUI() {
+      const newN = parseInt(els('N').value,10); const newL = parseFloat(els('L').value); let rebuild = false;
+      if (newN !== N || newL !== L) { N = newN; L = newL; rebuild = true; }
+      dt = parseFloat(els('dt').value); spf = parseInt(els('spf').value,10);
+      state.yscaleX = parseFloat(els('yscaleX').value); state.yscaleK = parseFloat(els('yscaleK').value);
+      state.lineStyleX = els('lineStyleX').value; state.lineStyleK = els('lineStyleK').value; autoNorm = els('norm').value === '1'; state.damp = parseFloat(els('damp').value);
+      state.packet.shape = els('shape').value; state.packet.k0 = parseFloat(els('k0').value); state.packet.x0 = parseFloat(els('x0').value); state.packet.sigma = parseFloat(els('sigma').value); state.packet.phi0 = parseFloat(els('phi0').value);
+      state.potType = els('potType').value; state.barrier.x = parseFloat(els('Bx').value); state.barrier.w = parseFloat(els('Bw').value); state.barrier.v = parseFloat(els('Bv').value); state.barrier.alpha = parseFloat(els('Balpha').value);
+      state.coulomb.Z = parseFloat(els('Z').value); state.coulomb.a = parseFloat(els('softA').value); state.coulomb.x = parseFloat(els('Cx').value);
+      state.dtau = parseFloat(els('dtau').value); state.iters = parseInt(els('iters').value,10); state.parity = els('parity').value; state.useEigenAsInitial = els('useEigenInit').checked;
+      els('barrierGroup').style.display = (state.potType==='barrier'||state.potType==='well') ? '' : 'none';
+      els('coulombGroup').style.display = (state.potType==='coulomb') ? '' : 'none';
+      if (rebuild) setupGrid(); else { buildPotential(); buildPhases(); }
+    }
+
+    els('applyPotential').addEventListener('click', ()=>{ readUI(); });
+    els('applyInit').addEventListener('click', ()=>{ readUI(); applyInitial(); });
+    els('resetBtn').addEventListener('click', ()=>{ readUI(); applyInitial(); });
+    els('runBtn').addEventListener('click', (e)=>{ state.running = !state.running; e.currentTarget.setAttribute('aria-pressed', state.running ? 'true' : 'false'); e.currentTarget.textContent = state.running ? '⏵ Run' : '⏸ Pause'; });
+    els('stepBtn').addEventListener('click', ()=>{ readUI(); stepOnce(); drawPosition(); drawMomentum(); drawHUD(); });
+    els('relaxBtn').addEventListener('click', ()=>{ readUI(); relaxEigenstate(); });
+    els('applyEigenBtn').addEventListener('click', ()=>{ applyEigenNow(); });
+
+    ['dt','N','L'].forEach(id => els(id).addEventListener('change', ()=>{ readUI(); }));
+    ['potType','Bx','Bw','Bv','Balpha','Z','softA','Cx'].forEach(id => els(id).addEventListener('change', ()=>{ readUI(); }));
+    ['yscaleX','yscaleK','lineStyleX','lineStyleK','norm','damp','dtau','iters','parity','useEigenInit'].forEach(id => els(id).addEventListener('change', ()=>{ readUI(); }));
+
+    // ===== Animation loop =====
+    function loop() {
+      if (state.running) { for (let i=0;i<spf;i++) stepOnce(); }
+      drawPosition(); drawMomentum(); drawHUD();
+      requestAnimationFrame(loop);
+    }
+
+    // ===== Init =====
+    setupGrid();
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>

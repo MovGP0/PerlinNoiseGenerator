@@ -1,339 +1,190 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>WebGL2 RGB Perlin Noise Visualizer</title>
-  <style>
-    html, body {
-      height: 100%;
-      margin: 0;
-      background: #0b0d10;
-      color: #e6edf3;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
-      overflow: hidden;
-    }
-    #container {
-      position: fixed;
-      inset: 0;
-    }
-    #webglCanvas {
-      width: 100%;
-      height: 100%;
-      display: block;
-      background: #000;
-      outline: none;
-    }
-    #controlPanel {
-      position: absolute;
-      top: 12px;
-      left: 12px;
-      display: grid;
-      grid-template-columns: auto auto;
-      gap: 10px 14px;
-      padding: 12px 14px;
-      background: rgba(10,12,16,0.72);
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(255,255,255,0.07);
-      border-radius: 14px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.35);
-      user-select: none;
-    }
-    #controlPanel label { opacity: 0.85; font-size: 12px; letter-spacing: .2px; align-self: center; }
-    #controlPanel input[type="range"] { width: 220px; }
-    #controlPanel input[type="number"] { width: 90px; }
-    #controlPanel .row { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; }
-    #controlPanel button {
-      border: 1px solid rgba(255,255,255,0.12);
-      background: rgba(255,255,255,0.06);
-      color: #e6edf3;
-      padding: 8px 10px;
-      border-radius: 10px;
-      cursor: pointer;
-    }
-    #controlPanel button:hover { background: rgba(255,255,255,0.10); }
-    .value { opacity: 0.7; font-variant-numeric: tabular-nums; min-width: 48px; text-align: right; display: inline-block; }
-    .spacer { height: 1px; background: rgba(255,255,255,0.08); grid-column: 1 / -1; margin: 4px 0; }
-    @media (max-width: 700px) {
-      #controlPanel { transform: scale(0.9); transform-origin: top left; }
-    }
-  </style>
-</head>
-<body>
-  <div id="container">
-    <canvas id="webglCanvas" tabindex="0" aria-label="RGB Perlin Noise Canvas"></canvas>
-    <div id="controlPanel" role="group" aria-label="Controls">
-      <label for="scaleRange">Scale</label>
-      <div class="row">
-        <input id="scaleRange" type="range" min="0.2" max="20" step="0.01" value="6" />
-        <span id="scaleValue" class="value">6.00</span>
-      </div>
-
-      <label for="octavesRange">Octaves</label>
-      <div class="row">
-        <input id="octavesRange" type="range" min="1" max="10" step="1" value="6" />
-        <span id="octavesValue" class="value">6</span>
-      </div>
-
-      <label for="lacunarityRange">Lacunarity</label>
-      <div class="row">
-        <input id="lacunarityRange" type="range" min="1.2" max="3.5" step="0.01" value="2.02" />
-        <span id="lacunarityValue" class="value">2.02</span>
-      </div>
-
-      <label for="gainRange">Gain</label>
-      <div class="row">
-        <input id="gainRange" type="range" min="0.2" max="0.9" step="0.01" value="0.55" />
-        <span id="gainValue" class="value">0.55</span>
-      </div>
-
-      <label for="speedRange">Speed</label>
-      <div class="row">
-        <input id="speedRange" type="range" min="0.0" max="3.0" step="0.01" value="0.7" />
-        <span id="speedValue" class="value">0.70</span>
-      </div>
-
-      <label for="contrastRange">Contrast</label>
-      <div class="row">
-        <input id="contrastRange" type="range" min="0.5" max="2.0" step="0.01" value="1.0" />
-        <span id="contrastValue" class="value">1.00</span>
-      </div>
-
-      <label for="seedInput">Seed</label>
-      <div class="row">
-        <input id="seedInput" type="number" min="0" step="1" value="1337" />
-        <button id="randomizeSeedButton">Randomize</button>
-      </div>
-
-      <div class="spacer"></div>
-
-      <div class="row">
-        <button id="toggleAnimationButton" aria-pressed="true">⏸ Pause</button>
-        <button id="saveImageButton">💾 Save PNG</button>
-        <button id="hideUiButton">Hide UI</button>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    (function initializeApplication() {
-      const canvasElement = document.getElementById('webglCanvas');
-      const gl = canvasElement.getContext('webgl2', { antialias: false, depth: false, stencil: false, premultipliedAlpha: false, desynchronized: true, preserveDrawingBuffer: false });
-      if (!gl) {
-        alert('WebGL 2.0 is required. Your browser or GPU may not support it.');
-        return;
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Demos · Nice Index</title>
+    <meta name="description" content="A tidy, accessible index for small interactive demos." />
+    <style>
+      :root {
+        --bg: #0b1020;
+        --bg-soft: #0f1730;
+        --fg: #e6e9ef;
+        --muted: #b4b9c3;
+        --border: #273149;
+        --card: rgba(22, 28, 46, 0.6);
+        --accent: #70d7ff; /* cyan */
+        --accent-2: #a78bfa; /* violet */
+        --ring: #7dd3fc;
+        --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+        --radius: 16px;
       }
 
-      const vertexShaderSource = `#version 300 es\n\nprecision highp float;\n\nlayout (location = 0) in vec2 aPosition;\nout vec2 vUv;\n\nvoid main() {\n  vUv = aPosition * 0.5 + 0.5;\n  gl_Position = vec4(aPosition, 0.0, 1.0);\n}`;
-
-      // Classic (Improved) Perlin noise in 3D, plus fBM, evaluated per-fragment.
-      const fragmentShaderSource = `#version 300 es\n\nprecision highp float;\nprecision highp int;\n\nuniform vec2 uResolution;\nuniform float uTime;\nuniform float uScale;\nuniform float uSpeed;\nuniform int uOctaves;\nuniform float uLacunarity;\nuniform float uGain;\nuniform int uSeed;\nuniform float uContrast;\n\nin vec2 vUv;\nlayout (location = 0) out vec4 fragmentColor;\n\n// Fade curve for improved Perlin: 6t^5 - 15t^4 + 10t^3\nvec3 fade(vec3 t) {\n  return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);\n}\n\n// Hash a 3D cell coordinate into 0..255 deterministically (no LUT required).\nint hash3(ivec3 p, int seed) {\n  // Convert to float to use fast hash via sin; stable for moderate ranges.\n  vec3 pf = vec3(p) + float(seed);\n  float n = dot(pf, vec3(1.0, 57.0, 113.0));\n  // Scale the sine to create a pseudo-random distribution, then to 0..255.\n  return int(fract(sin(n) * 43758.5453123) * 256.0);\n}\n\n// Gradient selector from the original improved Perlin reference (12 edges + 4 duplicates).\nfloat gradDot(int h, vec3 p) {\n  int hh = h & 15;\n  float u = (hh < 8) ? p.x : p.y;\n  float v = (hh < 4) ? p.y : ((hh == 12 || hh == 14) ? p.x : p.z);\n  float a = ((hh & 1) == 0) ? u : -u;\n  float b = ((hh & 2) == 0) ? v : -v;\n  return a + b;\n}\n\nfloat perlinNoise3(vec3 p, int seed) {\n  ivec3 i0 = ivec3(floor(p));\n  vec3 f0 = fract(p);\n  vec3 f1 = f0 - 1.0;\n\n  // Hash for the eight cube corners\n  int h000 = hash3(i0 + ivec3(0,0,0), seed);\n  int h100 = hash3(i0 + ivec3(1,0,0), seed);\n  int h010 = hash3(i0 + ivec3(0,1,0), seed);\n  int h110 = hash3(i0 + ivec3(1,1,0), seed);\n  int h001 = hash3(i0 + ivec3(0,0,1), seed);\n  int h101 = hash3(i0 + ivec3(1,0,1), seed);\n  int h011 = hash3(i0 + ivec3(0,1,1), seed);\n  int h111 = hash3(i0 + ivec3(1,1,1), seed);\n\n  float n000 = gradDot(h000, f0.xyz);\n  float n100 = gradDot(h100, vec3(f1.x, f0.y, f0.z));\n  float n010 = gradDot(h010, vec3(f0.x, f1.y, f0.z));\n  float n110 = gradDot(h110, vec3(f1.x, f1.y, f0.z));\n  float n001 = gradDot(h001, vec3(f0.x, f0.y, f1.z));\n  float n101 = gradDot(h101, vec3(f1.x, f0.y, f1.z));\n  float n011 = gradDot(h011, vec3(f0.x, f1.y, f1.z));\n  float n111 = gradDot(h111, vec3(f1.x, f1.y, f1.z));\n\n  vec3 u = fade(f0);\n\n  float nx00 = mix(n000, n100, u.x);\n  float nx10 = mix(n010, n110, u.x);\n  float nx01 = mix(n001, n101, u.x);\n  float nx11 = mix(n011, n111, u.x);\n\n  float nxy0 = mix(nx00, nx10, u.y);\n  float nxy1 = mix(nx01, nx11, u.y);\n\n  float nxyz = mix(nxy0, nxy1, u.z);\n  // nxyz is approximately in [-1,1]\n  return nxyz;\n}\n\nconst int MAX_OCTAVES = 12;\n\nfloat fbm(vec3 p, int seed, int octaves, float lacunarity, float gain) {\n  float amplitude = 0.5;\n  float frequency = 1.0;\n  float sum = 0.0;\n  float amplitudeSum = 0.0;\n  for (int octaveIndex = 0; octaveIndex < MAX_OCTAVES; ++octaveIndex) {\n    if (octaveIndex >= octaves) break;\n    sum += perlinNoise3(p * frequency, seed + octaveIndex * 101) * amplitude;\n    amplitudeSum += amplitude;\n    frequency *= lacunarity;\n    amplitude *= gain;\n  }\n  // Normalize to roughly [-1,1]\n  return sum / max(amplitudeSum, 1e-6);\n}\n\nvoid main() {\n  // Maintain square scale regardless of aspect ratio\n  float shorter = min(uResolution.x, uResolution.y);\n  vec2 normalizedUv = (vUv * uResolution - 0.5 * uResolution) / shorter;\n\n  // Position in noise space; z axis animates over time\n  vec3 basePoint = vec3(normalizedUv * uScale, uTime * uSpeed);\n\n  // Offsets per channel to decorrelate RGB while keeping structure coherent\n  vec3 offsetR = vec3(12.37, 91.11, 7.71);\n  vec3 offsetG = vec3(58.21,  3.33, 19.87);\n  vec3 offsetB = vec3(7.07, 42.42, 73.99);\n\n  float r = fbm(basePoint + offsetR, uSeed + 17, uOctaves, uLacunarity, uGain);\n  float g = fbm(basePoint + offsetG, uSeed + 29, uOctaves, uLacunarity, uGain);\n  float b = fbm(basePoint + offsetB, uSeed + 43, uOctaves, uLacunarity, uGain);\n\n  // Map from [-1,1] to [0,1] and apply a simple contrast curve\n  vec3 color = 0.5 + 0.5 * vec3(r, g, b);\n  // Basic contrast around 0.5 without shifting midpoint too much\n  color = clamp(pow(color, vec3(1.0 / uContrast)), 0.0, 1.0);\n\n  // Gamma-correct to sRGB-ish display (approximate)\n  color = pow(color, vec3(1.0/2.2));\n\n  fragmentColor = vec4(color, 1.0);\n}\n`;
-
-      function createShader(glContext, shaderType, source) {
-        const shader = glContext.createShader(shaderType);
-        glContext.shaderSource(shader, source);
-        glContext.compileShader(shader);
-        if (!glContext.getShaderParameter(shader, glContext.COMPILE_STATUS)) {
-          const info = glContext.getShaderInfoLog(shader);
-          console.error('Shader compile error:', info, '\nSource:\n', source);
-          throw new Error(info || 'Unknown shader compile error');
+      @media (prefers-color-scheme: light) {
+        :root {
+          --bg: #f7f8fb;
+          --bg-soft: #ffffff;
+          --fg: #1b2333;
+          --muted: #4b5566;
+          --border: #e3e7ee;
+          --card: rgba(255, 255, 255, 0.8);
+          --accent: #2563eb;
+          --accent-2: #06b6d4;
+          --ring: #3b82f6;
+          --shadow: 0 12px 24px rgba(9, 13, 40, 0.08);
         }
-        return shader;
       }
 
-      function createProgram(glContext, vertexSource, fragmentSource) {
-        const vertexShader = createShader(glContext, glContext.VERTEX_SHADER, vertexSource);
-        const fragmentShader = createShader(glContext, glContext.FRAGMENT_SHADER, fragmentSource);
-        const program = glContext.createProgram();
-        glContext.attachShader(program, vertexShader);
-        glContext.attachShader(program, fragmentShader);
-        glContext.linkProgram(program);
-        if (!glContext.getProgramParameter(program, glContext.LINK_STATUS)) {
-          const info = glContext.getProgramInfoLog(program);
-          console.error('Program link error:', info);
-          throw new Error(info || 'Unknown program link error');
-        }
-        glContext.deleteShader(vertexShader);
-        glContext.deleteShader(fragmentShader);
-        return program;
+      *, *::before, *::after { box-sizing: border-box; }
+      html, body { height: 100%; }
+
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+        color: var(--fg);
+        background:
+          radial-gradient(1200px 600px at 10% -10%, rgba(112, 215, 255, 0.15), transparent 65%),
+          radial-gradient(900px 500px at 110% 10%, rgba(167, 139, 250, 0.18), transparent 60%),
+          linear-gradient(180deg, var(--bg) 0%, var(--bg-soft) 100%);
+        display: grid;
+        place-items: center;
+        line-height: 1.5;
       }
 
-      const program = createProgram(gl, vertexShaderSource, fragmentShaderSource);
-      gl.useProgram(program);
-
-      // Full-screen triangle (fewer vertices than a quad, eliminates T-junctions)
-      const vertexArray = gl.createVertexArray();
-      gl.bindVertexArray(vertexArray);
-      const vertexBuffer = gl.createBuffer();
-      gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
-      const fullScreenTriangle = new Float32Array([
-        -1, -1,
-         3, -1,
-        -1,  3,
-      ]);
-      gl.bufferData(gl.ARRAY_BUFFER, fullScreenTriangle, gl.STATIC_DRAW);
-      gl.enableVertexAttribArray(0);
-      gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-
-      // Uniform locations
-      const uniformLocations = {
-        resolution: gl.getUniformLocation(program, 'uResolution'),
-        time: gl.getUniformLocation(program, 'uTime'),
-        scale: gl.getUniformLocation(program, 'uScale'),
-        speed: gl.getUniformLocation(program, 'uSpeed'),
-        octaves: gl.getUniformLocation(program, 'uOctaves'),
-        lacunarity: gl.getUniformLocation(program, 'uLacunarity'),
-        gain: gl.getUniformLocation(program, 'uGain'),
-        seed: gl.getUniformLocation(program, 'uSeed'),
-        contrast: gl.getUniformLocation(program, 'uContrast'),
-      };
-
-      // State driven by UI
-      const state = {
-        isAnimating: true,
-        scale: 6.0,
-        octaves: 6,
-        lacunarity: 2.02,
-        gain: 0.55,
-        speed: 0.70,
-        contrast: 1.0,
-        seed: 1337,
-        startTimeSeconds: performance.now() / 1000,
-        pausedTimeOffset: 0,
-        timeWhenPaused: 0,
-      };
-
-      // Resize handling with device pixel ratio for crisp output
-      function resizeCanvasToDisplaySize() {
-        const pixelRatio = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
-        const displayWidth = Math.floor(canvasElement.clientWidth * pixelRatio);
-        const displayHeight = Math.floor(canvasElement.clientHeight * pixelRatio);
-        if (canvasElement.width !== displayWidth || canvasElement.height !== displayHeight) {
-          canvasElement.width = displayWidth;
-          canvasElement.height = displayHeight;
-        }
-        gl.viewport(0, 0, canvasElement.width, canvasElement.height);
-        gl.uniform2f(uniformLocations.resolution, canvasElement.width, canvasElement.height);
+      .container {
+        width: min(760px, 100% - 4rem);
+        padding: 2rem 0;
       }
 
-      // UI wiring
-      const scaleRange = document.getElementById('scaleRange');
-      const scaleValue = document.getElementById('scaleValue');
-      const octavesRange = document.getElementById('octavesRange');
-      const octavesValue = document.getElementById('octavesValue');
-      const lacunarityRange = document.getElementById('lacunarityRange');
-      const lacunarityValue = document.getElementById('lacunarityValue');
-      const gainRange = document.getElementById('gainRange');
-      const gainValue = document.getElementById('gainValue');
-      const speedRange = document.getElementById('speedRange');
-      const speedValue = document.getElementById('speedValue');
-      const contrastRange = document.getElementById('contrastRange');
-      const contrastValue = document.getElementById('contrastValue');
-      const seedInput = document.getElementById('seedInput');
-      const randomizeSeedButton = document.getElementById('randomizeSeedButton');
-      const toggleAnimationButton = document.getElementById('toggleAnimationButton');
-      const saveImageButton = document.getElementById('saveImageButton');
-      const hideUiButton = document.getElementById('hideUiButton');
-
-      function updateDisplayValues() {
-        scaleValue.textContent = Number(state.scale).toFixed(2);
-        octavesValue.textContent = String(state.octaves);
-        lacunarityValue.textContent = Number(state.lacunarity).toFixed(2);
-        gainValue.textContent = Number(state.gain).toFixed(2);
-        speedValue.textContent = Number(state.speed).toFixed(2);
-        contrastValue.textContent = Number(state.contrast).toFixed(2);
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        overflow: clip;
       }
 
-      function syncUniforms() {
-        gl.uniform1f(uniformLocations.scale, state.scale);
-        gl.uniform1i(uniformLocations.octaves, state.octaves);
-        gl.uniform1f(uniformLocations.lacunarity, state.lacunarity);
-        gl.uniform1f(uniformLocations.gain, state.gain);
-        gl.uniform1f(uniformLocations.speed, state.speed);
-        gl.uniform1f(uniformLocations.contrast, state.contrast);
-        gl.uniform1i(uniformLocations.seed, state.seed | 0);
+      header {
+        padding: 1.25rem 1.5rem 0.75rem 1.5rem;
       }
 
-      scaleRange.addEventListener('input', () => { state.scale = parseFloat(scaleRange.value); updateDisplayValues(); });
-      octavesRange.addEventListener('input', () => { state.octaves = parseInt(octavesRange.value, 10); updateDisplayValues(); });
-      lacunarityRange.addEventListener('input', () => { state.lacunarity = parseFloat(lacunarityRange.value); updateDisplayValues(); });
-      gainRange.addEventListener('input', () => { state.gain = parseFloat(gainRange.value); updateDisplayValues(); });
-      speedRange.addEventListener('input', () => { state.speed = parseFloat(speedRange.value); updateDisplayValues(); });
-      contrastRange.addEventListener('input', () => { state.contrast = parseFloat(contrastRange.value); updateDisplayValues(); });
-      seedInput.addEventListener('change', () => { state.seed = parseInt(seedInput.value, 10) || 0; });
-      randomizeSeedButton.addEventListener('click', () => { state.seed = Math.floor(Math.random() * 1_000_000) | 0; seedInput.value = String(state.seed); });
-
-      toggleAnimationButton.addEventListener('click', () => {
-        state.isAnimating = !state.isAnimating;
-        if (state.isAnimating) {
-          // resume: accumulate paused time
-          state.pausedTimeOffset += performance.now() / 1000 - state.timeWhenPaused;
-          toggleAnimationButton.textContent = '⏸ Pause';
-          toggleAnimationButton.setAttribute('aria-pressed', 'true');
-        } else {
-          // pause: remember when we paused
-          state.timeWhenPaused = performance.now() / 1000;
-          toggleAnimationButton.textContent = '▶️ Resume';
-          toggleAnimationButton.setAttribute('aria-pressed', 'false');
-        }
-      });
-
-      saveImageButton.addEventListener('click', () => {
-        // Temporarily force one draw before export to ensure the frame is fresh
-        drawFrame();
-        const dataUrl = canvasElement.toDataURL('image/png');
-        const anchorElement = document.createElement('a');
-        anchorElement.href = dataUrl;
-        anchorElement.download = 'rgb-perlin-noise.png';
-        document.body.appendChild(anchorElement);
-        anchorElement.click();
-        anchorElement.remove();
-      });
-
-      hideUiButton.addEventListener('click', () => {
-        const panel = document.getElementById('controlPanel');
-        const isHidden = panel.style.display === 'none';
-        if (isHidden) {
-          panel.style.display = '';
-          hideUiButton.textContent = 'Hide UI';
-        } else {
-          panel.style.display = 'none';
-          hideUiButton.textContent = 'Show UI';
-        }
-      });
-
-      window.addEventListener('resize', resizeCanvasToDisplaySize);
-
-      // Main render loop
-      function drawFrame() {
-        resizeCanvasToDisplaySize();
-        syncUniforms();
-        const nowSeconds = performance.now() / 1000;
-        const timeSeconds = state.isAnimating ? (nowSeconds - state.startTimeSeconds - state.pausedTimeOffset) : (state.timeWhenPaused - state.startTimeSeconds - state.pausedTimeOffset);
-        gl.uniform1f(uniformLocations.time, timeSeconds);
-        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      h1 {
+        margin: 0;
+        font-weight: 800;
+        font-size: clamp(1.4rem, 1.1rem + 1.4vw, 2rem);
+        letter-spacing: 0.2px;
       }
 
-      function animationLoop() {
-        drawFrame();
-        requestAnimationFrame(animationLoop);
+      .subtitle {
+        margin: 0.35rem 0 0;
+        color: var(--muted);
+        font-size: 0.975rem;
       }
 
-      // Initial UI display and start
-      updateDisplayValues();
-      resizeCanvasToDisplaySize();
-      animationLoop();
+      nav {
+        padding: 0 1rem 1rem 1rem;
+      }
 
-      // Keyboard shortcuts: space = pause/resume, S = save
-      window.addEventListener('keydown', (event) => {
-        if (event.code === 'Space') {
-          toggleAnimationButton.click();
-          event.preventDefault();
-        } else if (event.code === 'KeyS') {
-          saveImageButton.click();
-        }
-      });
-    })();
-  </script>
-</body>
+      .links {
+        list-style: none;
+        margin: 0;
+        padding: 0.5rem;
+        display: grid;
+        gap: 0.75rem;
+      }
+
+      .item > a {
+        --pad: 1rem;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 0.75rem;
+        text-decoration: none;
+        color: inherit;
+        padding: var(--pad) calc(var(--pad) * 1.125);
+        border-radius: 14px;
+        border: 1px solid var(--border);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0) 60%),
+          linear-gradient(90deg, rgba(112, 215, 255, 0.12), rgba(167, 139, 250, 0.12));
+        transition: transform 150ms ease, box-shadow 150ms ease, background 200ms ease, border-color 200ms ease;
+      }
+
+      .item > a:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+        border-color: color-mix(in lab, var(--border), var(--accent) 35%);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 60%),
+          linear-gradient(90deg, rgba(112, 215, 255, 0.18), rgba(167, 139, 250, 0.18));
+      }
+
+      .item > a:active { transform: translateY(0); }
+
+      .item > a:focus-visible {
+        outline: 3px solid var(--ring);
+        outline-offset: 2px;
+      }
+
+      .label {
+        font-weight: 600;
+        letter-spacing: 0.2px;
+      }
+
+      .arrow {
+        width: 1.25rem; height: 1.25rem;
+        border-radius: 999px;
+        display: inline-grid; place-items: center;
+        border: 1px solid var(--border);
+        padding: 0.35rem;
+        transition: transform 150ms ease;
+      }
+
+      .item > a:hover .arrow { transform: translateX(3px); }
+
+      footer {
+        padding: 0.75rem 1.5rem 1.25rem 1.5rem;
+        border-top: 1px dashed var(--border);
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        * { transition: none !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="container">
+      <article class="card" aria-labelledby="title">
+        <header>
+          <h1 id="title">Content</h1>
+          <p class="subtitle">A tiny hub for experiments and visualizations.</p>
+        </header>
+
+        <nav aria-label="Demos">
+          <ul class="links">
+            <li class="item">
+              <a href="./perlinnoisegenerator.html">
+                <span class="label">Perlin Noise Generator</span>
+                <span class="arrow" aria-hidden="true" title="Open">➜</span>
+              </a>
+            </li>
+            <li class="item">
+              <a href="./quantum_tunneling_momentum_space_visualizer_1_d_canvas.html">
+                <span class="label">Quantum Tunneling &amp; Momentum‑Space Visualizer (1D)</span>
+                <span class="arrow" aria-hidden="true" title="Open">➜</span>
+              </a>
+            </li>
+          </ul>
+        </nav>
+
+        <footer>
+          Tip: Use <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + <kbd>Click</kbd> to open a demo in a new tab.
+        </footer>
+      </article>
+    </main>
+  </body>
 </html>
